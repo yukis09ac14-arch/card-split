@@ -1,20 +1,27 @@
 import { useState, useCallback } from "react";
 
+function normalizeDate(str) {
+  // 2026年05月24日 → 2026/05/24
+  const m = str.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/);
+  if (m) return `${m[1]}/${m[2].padStart(2, "0")}/${m[3].padStart(2, "0")}`;
+  return str;
+}
+
 function detectAndParseCSV(text) {
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length === 0) return { records: [], cardType: "unknown" };
 
-  const headerLine = lines[0].toLowerCase();
-  let cardType = "smbc";
-  if (headerLine.includes("利用日") || headerLine.includes("今回支払金額")) {
-    cardType = "epos";
-  }
+  const headerLine = lines[0];
+  // エポス判定：ヘッダーに「ご利用年月日」または「ご利用場所」を含む
+  const isEpos = headerLine.includes("ご利用年月日") || headerLine.includes("ご利用場所");
+  const cardType = isEpos ? "epos" : "smbc";
 
   const records = [];
   for (const line of lines) {
     const cols = line.split(",").map((c) => c.replace(/^"|"$/g, "").trim());
     if (cols.every((c) => !c)) continue;
-    if (cols[0].includes("利用日") || cols[0].includes("ご利用日")) continue;
+    // ヘッダー・合計行スキップ
+    if (cols[0].includes("種別") || cols[0].includes("利用日") || cols[0].includes("ご利用日")) continue;
     if (cols[0].includes("合計") || cols[0].includes("お支払")) continue;
 
     const datePattern = /^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$|^\d{1,2}[\/\-]\d{1,2}$|^\d{4}年\d{1,2}月\d{1,2}日$/;
@@ -28,8 +35,10 @@ function detectAndParseCSV(text) {
     }
     if (amountIdx === -1) continue;
 
-    const date = cols[dateIdx].replace(/\s/g, "");
-    const name = cols[dateIdx + 1] || "不明";
+    const rawDate = cols[dateIdx].replace(/\s/g, "");
+    const date = normalizeDate(rawDate);
+    // 店名：日付の次列。スペース埋めをトリム
+    const name = (cols[dateIdx + 1] || "不明").replace(/\s+/g, " ").trim() || "不明";
     const amount = parseInt(cols[amountIdx].replace(/,/g, ""));
     if (isNaN(amount) || amount <= 0) continue;
     if (name.includes("合計") || name.includes("お支払")) continue;
@@ -49,8 +58,8 @@ const CARD_COLOR = { smbc: "#60a5fa", epos: "#34d399", unknown: "#888" };
 export default function App() {
   const [tab, setTab] = useState("settings");
   const [husbandRatio, setHusbandRatio] = useState(50);
-  const [wifeFixed, setWifeFixed] = useState([{ id: Date.now(), name: "", amount: "" }]);
-  const [husbandFixed, setHusbandFixed] = useState([{ id: Date.now() + 1, name: "", amount: "" }]);
+  const [wifeFixed, setWifeFixed] = useState([{ id: Date.now(), name: "住宅ローン", amount: "48108" }]);
+  const [husbandFixed, setHusbandFixed] = useState([{ id: Date.now() + 1, name: "住宅ローン", amount: "72970" }]);
   const [csvRecords, setCsvRecords] = useState([]);
   const [loadedFiles, setLoadedFiles] = useState([]);
   const [csvError, setCsvError] = useState("");
